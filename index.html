@@ -1,126 +1,646 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <title>人頭統計系統</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      padding: 20px;
-    }
-    h1 {
-      text-align: center;
-    }
-    .card {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      padding: 20px;
-      margin: 15px 0;
-    }
-    button {
-      padding: 8px 12px;
-      margin: 5px;
-      border: none;
-      border-radius: 6px;
-      background: #4CAF50;
-      color: #fff;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #45a049;
-    }
-    .delete-btn {
-      background: #f44336;
-    }
-    .delete-btn:hover {
-      background: #e53935;
-    }
-    .grey {
-      background: #eee;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>國立嘉義特殊教育學校 即時人數回報系統</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .container {
+            max-width: 800px;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 90%;
+            width: 400px;
+        }
+        .message-box {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            color: white;
+            font-weight: bold;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            display: none;
+            transition: opacity 0.3s ease-in-out;
+        }
+    </style>
 </head>
-<body>
-  <h1>人頭統計系統</h1>
-  <div id="app"></div>
+<body class="bg-gray-100 p-4">
+    <div class="message-box" id="message-box"></div>
+    <div class="container mx-auto bg-white rounded-xl shadow-lg p-6 md:p-10 mt-8">
+        <!-- 標題 -->
+        <h1 class="text-4xl font-bold text-center text-gray-800 mb-2">國立嘉義特殊教育學校</h1>
+        <h2 class="text-3xl font-bold text-center text-gray-600 mb-6">即時人數回報系統</h2>
+        <p class="text-center text-gray-500 mb-4 text-base">歡迎！您的使用者 ID：<span id="user-id" class="font-mono text-xs text-gray-400"></span></p>
 
-  <!-- Firebase SDK -->
-  <script type="module">
-    // ✅ 這裡放你的 Firebase 設定值（從 Firebase Console 拿）
-    const firebaseConfig = {
-      apiKey: "你的 API Key",
-      authDomain: "people921-33420.firebaseapp.com",
-      projectId: "people921-33420",
-      storageBucket: "people921-33420.appspot.com",
-      messagingSenderId: "91139631676",
-      appId: "1:91139631676:web:xxxxxx"
-    };
+        <!-- 管理按鈕 -->
+        <div class="flex justify-center flex-wrap gap-4 mb-8">
+            <button id="reset-button" class="px-6 py-2 bg-red-500 text-white font-semibold rounded-full hover:bg-red-600 transition-colors duration-200 shadow-md text-lg">
+                重置資料
+            </button>
+            <button id="download-button" class="px-6 py-2 bg-green-500 text-white font-semibold rounded-full hover:bg-green-600 transition-colors duration-200 shadow-md text-lg">
+                下載統計表
+            </button>
+        </div>
 
-    // 初始化 Firebase
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } 
-      from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+        <!-- 總計統計看板 -->
+        <div id="summary-board" class="bg-blue-50 p-6 rounded-lg shadow-inner mb-8">
+            <h3 class="text-2xl font-bold text-gray-700 mb-4 text-center">全校人數統計</h3>
+            <!-- 學部統計區塊，平均分佈 -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center mb-4">
+                <div class="p-3 bg-white rounded-lg shadow cursor-pointer hover:bg-gray-100 transition-colors" data-department="高職部">
+                    <p class="text-base font-medium text-gray-500">高職部</p>
+                    <p class="text-sm text-gray-400">應到/實到</p>
+                    <p class="text-xl font-bold text-gray-800" id="summary-highschool"></p>
+                </div>
+                <div class="p-3 bg-white rounded-lg shadow cursor-pointer hover:bg-gray-100 transition-colors" data-department="國中部">
+                    <p class="text-base font-medium text-gray-500">國中部</p>
+                    <p class="text-sm text-gray-400">應到/實到</p>
+                    <p class="text-xl font-bold text-gray-800" id="summary-middleschool"></p>
+                </div>
+                <div class="p-3 bg-white rounded-lg shadow cursor-pointer hover:bg-gray-100 transition-colors" data-department="國小部">
+                    <p class="text-base font-medium text-gray-500">國小部</p>
+                    <p class="text-sm text-gray-400">應到/實到</p>
+                    <p class="text-xl font-bold text-gray-800" id="summary-primaryschool"></p>
+                </div>
+                <div class="p-3 bg-white rounded-lg shadow cursor-pointer hover:bg-gray-100 transition-colors" data-department="學前部">
+                    <p class="text-base font-medium text-gray-500">學前部</p>
+                    <p class="text-sm text-gray-400">應到/實到</p>
+                    <p class="text-xl font-bold text-gray-800" id="summary-preschool"></p>
+                </div>
+            </div>
+            <!-- 全校總計區塊 -->
+            <div class="p-3 bg-white rounded-lg shadow text-center">
+                <p class="text-base font-medium text-gray-500">全校總計</p>
+                <p class="text-sm text-gray-400">應到/實到</p>
+                <p class="text-2xl font-bold text-gray-800" id="summary-total"></p>
+            </div>
+        </div>
+        
+        <!-- 加載狀態 -->
+        <div id="loading" class="text-center text-gray-500 text-lg">載入中...</div>
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+        <!-- 學部導航 -->
+        <div id="department-nav" class="flex flex-wrap justify-center gap-2 mb-8 hidden">
+            <!-- 按鈕將由 JavaScript 動態生成 -->
+        </div>
 
-    const appDiv = document.getElementById("app");
+        <!-- 班級回報表單 -->
+        <div id="class-container" class="space-y-6 hidden">
+            <!-- 班級回報區塊將由 JavaScript 動態生成 -->
+        </div>
 
-    // 🔹 新增人員
-    async function addPerson(name) {
-      await addDoc(collection(db, "people"), {
-        name: name,
-        introduced: false,
-        createdAt: new Date()
-      });
-      loadPeople();
-    }
+        <!-- 學部回報表格，預設隱藏 -->
+        <div id="table-container" class="hidden">
+            <h3 class="text-2xl font-bold text-gray-700 mb-4" id="table-department-title"></h3>
+            <div class="overflow-x-auto rounded-lg shadow mb-4">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">
+                                班級
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">
+                                應到人數
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">
+                                實到人數
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">
+                                未到狀態
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- 表格內容將由 JavaScript 動態生成 -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="text-center">
+                <button id="back-button" class="px-6 py-2 bg-gray-500 text-white font-semibold rounded-full hover:bg-gray-600 transition-colors duration-200 shadow-md">
+                    回到回報頁面
+                </button>
+            </div>
+        </div>
+    </div>
 
-    // 🔹 刪除人員
-    async function deletePerson(id) {
-      await deleteDoc(doc(db, "people", id));
-      loadPeople();
-    }
+    <!-- 密碼輸入 Modal -->
+    <div id="password-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h4 class="text-xl font-bold mb-4 text-center">請輸入密碼</h4>
+            <input type="password" id="password-input" class="w-full p-2 mb-4 border rounded-md text-lg" placeholder="在此輸入密碼">
+            <div class="flex justify-between gap-4">
+                <button id="confirm-reset-button" class="px-6 py-2 bg-red-500 text-white font-semibold rounded-full hover:bg-red-600 transition-colors duration-200 text-lg flex-grow">
+                    確認重置
+                </button>
+                <button id="cancel-reset-button" class="px-6 py-2 bg-gray-500 text-white font-semibold rounded-full hover:bg-gray-600 transition-colors duration-200 text-lg flex-grow">
+                    取消
+                </button>
+            </div>
+        </div>
+    </div>
 
-    // 🔹 載入人員
-    async function loadPeople() {
-      appDiv.innerHTML = "";
-      const snapshot = await getDocs(collection(db, "people"));
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        const div = document.createElement("div");
-        div.className = "card" + (data.introduced ? " grey" : "");
-        div.innerHTML = `
-          <strong>${data.name}</strong><br/>
-          <button onclick="deletePerson('${docSnap.id}')" class="delete-btn">刪除</button>
-        `;
-        appDiv.appendChild(div);
-      });
+    <!-- 新增班級 Modal -->
+    <div id="add-class-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h4 class="text-xl font-bold mb-4 text-center">新增班級</h4>
+            <div class="space-y-4">
+                <div>
+                    <label for="new-class-name" class="block text-base font-medium text-gray-700">班級名稱</label>
+                    <input type="text" id="new-class-name" class="w-full p-2 border rounded-md text-lg">
+                </div>
+                <div>
+                    <label for="new-expected-count" class="block text-base font-medium text-gray-700">應到人數</label>
+                    <input type="number" id="new-expected-count" class="w-full p-2 border rounded-md text-lg">
+                </div>
+            </div>
+            <div class="flex justify-between gap-4 mt-6">
+                <button id="confirm-add-button" class="px-6 py-2 bg-blue-500 text-white font-semibold rounded-full hover:bg-blue-600 transition-colors duration-200 text-lg flex-grow">
+                    確認新增
+                </button>
+                <button id="cancel-add-button" class="px-6 py-2 bg-gray-500 text-white font-semibold rounded-full hover:bg-gray-600 transition-colors duration-200 text-lg flex-grow">
+                    取消
+                </button>
+            </div>
+        </div>
+    </div>
 
-      // 新增輸入框
-      const inputDiv = document.createElement("div");
-      inputDiv.className = "card";
-      inputDiv.innerHTML = `
-        <input type="text" id="nameInput" placeholder="輸入名字"/>
-        <button onclick="addPersonFromInput()">新增</button>
-      `;
-      appDiv.appendChild(inputDiv);
-    }
+    <!-- 刪除班級 Modal -->
+    <div id="delete-modal" class="modal-overlay hidden">
+        <div class="modal-content text-center">
+            <h4 class="text-xl font-bold mb-4">確認刪除班級？</h4>
+            <p class="mb-6 text-gray-700 text-base">此操作將永久清除班級 **<span id="delete-class-name" class="font-bold"></span>** 的所有數據，且無法復原。</p>
+            <div class="flex justify-between gap-4">
+                <button id="confirm-delete-button" class="px-6 py-2 bg-red-500 text-white font-semibold rounded-full hover:bg-red-600 transition-colors duration-200 text-lg flex-grow">
+                    確認刪除
+                </button>
+                <button id="cancel-delete-button" class="px-6 py-2 bg-gray-500 text-white font-semibold rounded-full hover:bg-gray-600 transition-colors duration-200 text-lg flex-grow">
+                    取消
+                </button>
+            </div>
+        </div>
+    </div>
 
-    // 🔹 輔助函數
-    window.addPersonFromInput = function() {
-      const input = document.getElementById("nameInput");
-      if (input.value.trim() !== "") {
-        addPerson(input.value.trim());
-        input.value = "";
-      }
-    };
-    window.deletePerson = deletePerson;
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // 載入
-    loadPeople();
-  </script>
+        // Firebase 初始化與使用者 ID 顯示
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        setLogLevel('debug'); // 啟用 Firestore 偵錯日誌
+
+        let firestoreData = {};
+        let schoolStructure = {};
+        let currentDepartment = '';
+        let userId = '';
+        let classToDelete = {}; // 用於暫存待刪除的班級資訊
+        
+        const dataDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'headcounts', 'summary');
+        const structureDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'schoolStructure', 'config');
+
+        const classContainer = document.getElementById('class-container');
+        const tableContainer = document.getElementById('table-container');
+        const loadingSpinner = document.getElementById('loading');
+        const messageBox = document.getElementById('message-box');
+
+        const defaultSchoolStructure = {
+            '高職部': ['高一甲', '高一乙', '高一丙', '高一丁', '高二甲', '高二乙', '高二丙', '高二丁', '高三甲', '高三乙', '高三丙', '高三丁'],
+            '國中部': ['中一甲', '中一乙', '中二甲', '中二乙', '中三甲'],
+            '國小部': ['小甲班', '小乙班', '小丙班', '小丁班', '小戊班', '小己班', '小庚班'],
+            '學前部': ['小熊班']
+        };
+
+        // 函數：顯示消息提示
+        function showMessage(message, type = 'success') {
+            messageBox.textContent = message;
+            messageBox.style.display = 'block';
+            if (type === 'success') {
+                messageBox.style.backgroundColor = '#10B981'; // green-500
+            } else if (type === 'error') {
+                messageBox.style.backgroundColor = '#EF4444'; // red-500
+            } else {
+                messageBox.style.backgroundColor = '#3B82F6'; // blue-500
+            }
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, 3000);
+        }
+
+        // 函數：根據狀態更新統計看板
+        function updateSummaryBoard() {
+            let totalExpected = 0;
+            let totalActual = 0;
+
+            Object.keys(schoolStructure).forEach(department => {
+                let deptExpected = 0;
+                let deptActual = 0;
+                
+                const classes = schoolStructure[department];
+                if (classes) {
+                    classes.forEach(className => {
+                        const classData = firestoreData[department]?.[className] || { expected: 0, actual: 0 };
+                        deptExpected += parseInt(classData.expected) || 0;
+                        deptActual += parseInt(classData.actual) || 0;
+                    });
+                }
+
+                totalExpected += deptExpected;
+                totalActual += deptActual;
+
+                const summaryElement = document.getElementById(`summary-${department === '高職部' ? 'highschool' : department === '國中部' ? 'middleschool' : department === '國小部' ? 'primaryschool' : 'preschool'}`);
+                if (summaryElement) {
+                    summaryElement.innerHTML = `<span class="text-gray-800">${deptExpected}</span> / <span class="${deptActual < deptExpected ? 'text-red-500' : 'text-green-500'}">${deptActual}</span>`;
+                }
+            });
+
+            const totalElement = document.getElementById('summary-total');
+            if (totalElement) {
+                totalElement.innerHTML = `<span class="text-gray-800">${totalExpected}</span> / <span class="${totalActual < totalExpected ? 'text-red-500' : 'text-green-500'}">${totalActual}</span>`;
+            }
+        }
+
+        // 函數：渲染學部導航按鈕
+        function renderDepartmentNav() {
+            const nav = document.getElementById('department-nav');
+            nav.innerHTML = ''; 
+
+            Object.keys(schoolStructure).forEach(department => {
+                const button = document.createElement('button');
+                button.textContent = department;
+                button.classList.add('px-4', 'py-2', 'rounded-full', 'font-semibold', 'transition-colors', 'duration-200');
+                if (department === currentDepartment) {
+                    button.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'shadow-md');
+                } else {
+                    button.classList.add('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+                }
+                button.addEventListener('click', () => {
+                    currentDepartment = department;
+                    renderDepartmentNav();
+                    renderClasses(); 
+                });
+                nav.appendChild(button);
+            });
+        }
+
+        // 函數：渲染班級回報表單
+        function renderClasses() {
+            classContainer.classList.remove('hidden');
+            tableContainer.classList.add('hidden');
+            classContainer.innerHTML = ''; 
+            const classes = schoolStructure[currentDepartment];
+            
+            if (!classes || classes.length === 0) {
+                classContainer.innerHTML = `<p class="text-center text-gray-500 text-lg">此學部無班級資料。</p>`;
+            } else {
+                classes.forEach(className => {
+                    const classData = firestoreData[currentDepartment]?.[className] || { expected: '', actual: '', absentStatus: '' };
+    
+                    const classDiv = document.createElement('div');
+                    classDiv.id = `class-${className}`;
+                    classDiv.classList.add('bg-gray-50', 'p-6', 'rounded-lg', 'border', 'border-gray-200', 'shadow-sm', 'relative');
+    
+                    classDiv.innerHTML = `
+                        <h3 class="text-xl font-bold text-gray-700 mb-4">${className}</h3>
+                        <button class="delete-class-button absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors" data-class="${className}" data-department="${currentDepartment}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.036 21H7.964a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                            <div>
+                                <label for="${className}-expected" class="block text-base font-medium text-gray-700">應到人數</label>
+                                <input type="number" id="${className}-expected" value="${classData.expected}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-lg p-2">
+                            </div>
+                            <div>
+                                <label for="${className}-actual" class="block text-base font-medium text-gray-700">實到人數</label>
+                                <input type="number" id="${className}-actual" value="${classData.actual}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-lg p-2">
+                            </div>
+                            <div class="lg:col-span-3">
+                                <label for="${className}-absent" class="block text-base font-medium text-gray-700">未到狀態</label>
+                                <textarea id="${className}-absent" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-lg p-2" placeholder="請填寫未到學生的姓名或狀況...">${classData.absentStatus}</textarea>
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button class="report-button px-6 py-2 bg-blue-500 text-white font-semibold rounded-full hover:bg-blue-600 transition-colors duration-200 shadow-md" data-class="${className}" data-department="${currentDepartment}">
+                                回報
+                            </button>
+                        </div>
+                    `;
+                    classContainer.appendChild(classDiv);
+                });
+            }
+
+            // 新增班級按鈕
+            const addButton = document.createElement('button');
+            addButton.id = 'add-class-button';
+            addButton.textContent = '新增班級';
+            addButton.classList.add('w-full', 'px-6', 'py-4', 'bg-blue-200', 'text-blue-700', 'font-semibold', 'rounded-lg', 'hover:bg-blue-300', 'transition-colors', 'duration-200', 'shadow-sm', 'mt-4');
+            classContainer.appendChild(addButton);
+            
+            // 為所有回報按鈕添加事件監聽器
+            document.querySelectorAll('.report-button').forEach(button => {
+                button.addEventListener('click', async (event) => {
+                    const classId = event.target.getAttribute('data-class');
+                    const departmentId = event.target.getAttribute('data-department');
+                    const expectedInput = document.getElementById(`${classId}-expected`);
+                    const actualInput = document.getElementById(`${classId}-actual`);
+                    const absentTextarea = document.getElementById(`${classId}-absent`);
+
+                    const newData = {
+                        expected: parseInt(expectedInput.value) || 0,
+                        actual: parseInt(actualInput.value) || 0,
+                        absentStatus: absentTextarea.value
+                    };
+
+                    try {
+                        let currentData = firestoreData[departmentId] || {};
+                        currentData[classId] = newData;
+                        await setDoc(dataDocRef, { [departmentId]: currentData }, { merge: true });
+                        showMessage('已成功儲存！');
+                    } catch (e) {
+                        console.error("寫入 Firestore 錯誤: ", e);
+                        showMessage('儲存失敗，請重試。', 'error');
+                    }
+                });
+            });
+
+            // 為所有刪除按鈕添加事件監聽器
+            document.querySelectorAll('.delete-class-button').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    const classId = event.target.closest('button').getAttribute('data-class');
+                    const departmentId = event.target.closest('button').getAttribute('data-department');
+                    
+                    classToDelete = { classId, departmentId };
+                    document.getElementById('delete-class-name').textContent = classId;
+                    document.getElementById('delete-modal').classList.remove('hidden');
+                });
+            });
+
+            // 為新增班級按鈕添加事件監聽器
+            document.getElementById('add-class-button').addEventListener('click', () => {
+                document.getElementById('add-class-modal').classList.remove('hidden');
+                document.getElementById('new-class-name').value = '';
+                document.getElementById('new-expected-count').value = '';
+            });
+        }
+        
+        // 函數：渲染學部回報表格
+        function renderDepartmentReportTable(department) {
+            classContainer.classList.add('hidden');
+            tableContainer.classList.remove('hidden');
+
+            document.getElementById('table-department-title').textContent = `${department} 回報總覽`;
+            const tableBody = document.getElementById('report-table-body');
+            tableBody.innerHTML = '';
+            
+            const classes = schoolStructure[department];
+            if (!classes || classes.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="4" class="px-6 py-4 text-center text-gray-500">此學部無班級資料。</td>`;
+                tableBody.appendChild(row);
+                return;
+            }
+
+            classes.forEach(className => {
+                const classData = firestoreData[department]?.[className] || { expected: 0, actual: 0, absentStatus: '無' };
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-base font-medium text-gray-900">${className}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-base text-gray-500">${classData.expected}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-base text-gray-500">${classData.actual}</td>
+                    <td class="px-6 py-4 whitespace-normal text-base text-gray-500">${classData.absentStatus}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        // 頁面載入與 Firebase 認證
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                document.getElementById('user-id').textContent = userId;
+
+                // 監聽兩個 Firestore 文件
+                const structurePromise = new Promise((resolve) => {
+                    onSnapshot(structureDocRef, (doc) => {
+                        schoolStructure = doc.exists() ? doc.data() : defaultSchoolStructure;
+                        renderDepartmentNav();
+                        updateSummaryBoard();
+                        resolve();
+                    });
+                });
+
+                const dataPromise = new Promise((resolve) => {
+                    onSnapshot(dataDocRef, (doc) => {
+                        firestoreData = doc.exists() ? doc.data() : {};
+                        updateSummaryBoard(); // <--- 修正：每次資料變動都更新總計看板
+                        if (classContainer.classList.contains('hidden')) {
+                            renderDepartmentReportTable(currentDepartment);
+                        } else {
+                            renderClasses(); // 修正：確保回報頁面也即時更新
+                        }
+                        resolve();
+                    });
+                });
+
+                await Promise.all([structurePromise, dataPromise]);
+
+                loadingSpinner.classList.add('hidden');
+                document.getElementById('department-nav').classList.remove('hidden');
+                document.getElementById('class-container').classList.remove('hidden');
+
+                if (!currentDepartment) {
+                    currentDepartment = Object.keys(schoolStructure)[0];
+                }
+                updateSummaryBoard();
+                renderDepartmentNav();
+                renderClasses();
+            }
+        });
+        
+        // 登入
+        async function signIn() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Firebase 認證錯誤:", error);
+            }
+        }
+        signIn();
+
+        // 事件監聽器
+        document.getElementById('back-button').addEventListener('click', () => {
+            tableContainer.classList.add('hidden');
+            classContainer.classList.remove('hidden');
+            renderClasses();
+        });
+
+        document.getElementById('reset-button').addEventListener('click', () => {
+            document.getElementById('password-modal').classList.remove('hidden');
+            document.getElementById('password-input').focus();
+        });
+
+        document.getElementById('cancel-reset-button').addEventListener('click', () => {
+            document.getElementById('password-modal').classList.add('hidden');
+            document.getElementById('password-input').value = '';
+        });
+
+        document.getElementById('confirm-reset-button').addEventListener('click', async () => {
+            const password = document.getElementById('password-input').value;
+            if (password === '1234') {
+                try {
+                    await setDoc(dataDocRef, {});
+                    await setDoc(structureDocRef, defaultSchoolStructure);
+                    showMessage('資料已成功重置！');
+                } catch (e) {
+                    console.error("重置資料錯誤:", e);
+                    showMessage('重置失敗，請重試。', 'error');
+                } finally {
+                    document.getElementById('password-modal').classList.add('hidden');
+                    document.getElementById('password-input').value = '';
+                }
+            } else {
+                showMessage('密碼錯誤！', 'error');
+                document.getElementById('password-input').value = '';
+            }
+        });
+
+        document.getElementById('download-button').addEventListener('click', () => {
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // Add UTF-8 BOM for Excel compatibility
+            csvContent += "學部,班級,應到人數,實到人數,未到狀態\n";
+            
+            let totalExpected = 0;
+            let totalActual = 0;
+
+            Object.keys(schoolStructure).forEach(department => {
+                const classes = schoolStructure[department];
+                if (!classes) return;
+                classes.forEach(className => {
+                    const classData = firestoreData[department]?.[className] || { expected: 0, actual: 0, absentStatus: '' };
+                    const row = `"${department}","${className}",${classData.expected},${classData.actual},"${classData.absentStatus}"\n`;
+                    csvContent += row;
+                    totalExpected += classData.expected;
+                    totalActual += classData.actual;
+                });
+            });
+
+            // 添加總計行
+            csvContent += `"${'全校'}",${'總計'},${totalExpected},${totalActual},"\"\n`;
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "嘉特即時人數統計.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showMessage('統計表已開始下載。');
+        });
+
+        document.getElementById('cancel-add-button').addEventListener('click', () => {
+            document.getElementById('add-class-modal').classList.add('hidden');
+        });
+
+        document.getElementById('confirm-add-button').addEventListener('click', async () => {
+            const className = document.getElementById('new-class-name').value.trim();
+            const expectedCount = parseInt(document.getElementById('new-expected-count').value);
+
+            if (className && !isNaN(expectedCount)) {
+                try {
+                    // 更新本地的 schoolStructure
+                    const updatedClasses = [...(schoolStructure[currentDepartment] || []), className];
+                    const updatedStructure = { ...schoolStructure, [currentDepartment]: updatedClasses };
+
+                    // 更新 Firestore 中的學部結構
+                    await setDoc(structureDocRef, updatedStructure);
+                    
+                    // 儲存新班級的初始資料
+                    const classData = firestoreData[currentDepartment] || {};
+                    classData[className] = { expected: expectedCount, actual: 0, absentStatus: '' };
+                    await setDoc(dataDocRef, { [currentDepartment]: classData }, { merge: true });
+
+                    document.getElementById('add-class-modal').classList.add('hidden');
+                    showMessage(`班級「${className}」已成功新增！`);
+                } catch (e) {
+                    console.error("新增班級錯誤:", e);
+                    showMessage('新增班級失敗，請重試。', 'error');
+                }
+            } else {
+                showMessage('請填寫有效的班級名稱與應到人數。', 'error');
+            }
+        });
+
+        document.getElementById('cancel-delete-button').addEventListener('click', () => {
+            document.getElementById('delete-modal').classList.add('hidden');
+        });
+
+        document.getElementById('confirm-delete-button').addEventListener('click', async () => {
+            const { classId, departmentId } = classToDelete;
+            try {
+                const updatedClasses = schoolStructure[departmentId].filter(c => c !== classId);
+                const updatedStructure = { ...schoolStructure, [departmentId]: updatedClasses };
+                
+                // 更新 Firestore 中的學部結構
+                await setDoc(structureDocRef, updatedStructure);
+                
+                // 刪除該班級的資料
+                const currentData = firestoreData[departmentId] || {};
+                delete currentData[classId];
+                await setDoc(dataDocRef, { [departmentId]: currentData }, { merge: true });
+
+                document.getElementById('delete-modal').classList.add('hidden');
+                showMessage(`班級「${classId}」已刪除。`);
+            } catch (e) {
+                console.error("刪除班級錯誤: ", e);
+                showMessage('刪除失敗，請重試。', 'error');
+            }
+        });
+
+        document.querySelectorAll('#summary-board div[data-department]').forEach(element => {
+            element.addEventListener('click', (event) => {
+                const department = event.currentTarget.getAttribute('data-department');
+                currentDepartment = department;
+                renderDepartmentNav();
+                renderDepartmentReportTable(department);
+            });
+        });
+    </script>
 </body>
 </html>
