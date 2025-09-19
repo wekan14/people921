@@ -208,13 +208,12 @@
 
     <script type="module">
         // 匯入 Firebase SDK
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js";
 
         // Firebase 初始化與使用者 ID 顯示
-        // 修正：使用環境變數 __firebase_config 來初始化 Firebase
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
@@ -225,11 +224,11 @@
 
         setLogLevel('debug'); // 啟用 Firestore 偵錯日誌
 
-        let firestoreData = {};
-        let schoolStructure = {};
+        let firestoreData = null;
+        let schoolStructure = null;
         let currentDepartment = '';
         let userId = '';
-        let classToDelete = {}; // 用於暫存待刪除的班級資訊
+        let classToDelete = {};
         
         const dataDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'headcounts', 'summary');
         const structureDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'schoolStructure', 'config');
@@ -267,6 +266,8 @@
             let totalExpected = 0;
             let totalActual = 0;
 
+            if (!schoolStructure || !firestoreData) return;
+
             Object.keys(schoolStructure).forEach(department => {
                 let deptExpected = 0;
                 let deptActual = 0;
@@ -299,6 +300,7 @@
         function renderDepartmentNav() {
             const nav = document.getElementById('department-nav');
             nav.innerHTML = ''; 
+            if (!schoolStructure) return;
 
             Object.keys(schoolStructure).forEach(department => {
                 const button = document.createElement('button');
@@ -320,6 +322,8 @@
 
         // 函數：渲染班級回報表單
         function renderClasses() {
+            if (!schoolStructure || !firestoreData) return;
+            
             classContainer.classList.remove('hidden');
             tableContainer.classList.add('hidden');
             classContainer.innerHTML = ''; 
@@ -422,6 +426,8 @@
         
         // 函數：渲染學部回報表格
         function renderDepartmentReportTable(department) {
+            if (!schoolStructure || !firestoreData) return;
+            
             classContainer.classList.add('hidden');
             tableContainer.classList.remove('hidden');
 
@@ -451,47 +457,47 @@
             });
         }
 
+        // 統一渲染函數
+        function renderUI() {
+            if (!schoolStructure || !firestoreData) {
+                return;
+            }
+
+            if (!currentDepartment) {
+                currentDepartment = Object.keys(schoolStructure)[0];
+            }
+            
+            loadingSpinner.classList.add('hidden');
+            document.getElementById('department-nav').classList.remove('hidden');
+            document.getElementById('class-container').classList.remove('hidden');
+
+            updateSummaryBoard();
+            renderDepartmentNav();
+
+            if (tableContainer.classList.contains('hidden')) {
+                renderClasses();
+            } else {
+                renderDepartmentReportTable(currentDepartment);
+            }
+        }
+
         // 頁面載入與 Firebase 認證
-        onAuthStateChanged(auth, async (user) => {
+        onAuthStateChanged(auth, (user) => {
             if (user) {
                 userId = user.uid;
                 document.getElementById('user-id').textContent = userId;
 
                 // 監聽兩個 Firestore 文件
-                const structurePromise = new Promise((resolve) => {
-                    onSnapshot(structureDocRef, (doc) => {
-                        schoolStructure = doc.exists() ? doc.data() : defaultSchoolStructure;
-                        renderDepartmentNav();
-                        updateSummaryBoard();
-                        resolve();
-                    });
+                onSnapshot(structureDocRef, (doc) => {
+                    schoolStructure = doc.exists() ? doc.data() : defaultSchoolStructure;
+                    renderUI();
                 });
 
-                const dataPromise = new Promise((resolve) => {
-                    onSnapshot(dataDocRef, (doc) => {
-                        firestoreData = doc.exists() ? doc.data() : {};
-                        updateSummaryBoard(); // <--- 修正：每次資料變動都更新總計看板
-                        if (classContainer.classList.contains('hidden')) {
-                            renderDepartmentReportTable(currentDepartment);
-                        } else {
-                            renderClasses(); // 修正：確保回報頁面也即時更新
-                        }
-                        resolve();
-                    });
+                onSnapshot(dataDocRef, (doc) => {
+                    firestoreData = doc.exists() ? doc.data() : {};
+                    renderUI();
                 });
 
-                await Promise.all([structurePromise, dataPromise]);
-
-                loadingSpinner.classList.add('hidden');
-                document.getElementById('department-nav').classList.remove('hidden');
-                document.getElementById('class-container').classList.remove('hidden');
-
-                if (!currentDepartment) {
-                    currentDepartment = Object.keys(schoolStructure)[0];
-                }
-                updateSummaryBoard();
-                renderDepartmentNav();
-                renderClasses();
             }
         });
         
@@ -588,14 +594,11 @@
 
             if (className && !isNaN(expectedCount)) {
                 try {
-                    // 更新本地的 schoolStructure
                     const updatedClasses = [...(schoolStructure[currentDepartment] || []), className];
                     const updatedStructure = { ...schoolStructure, [currentDepartment]: updatedClasses };
 
-                    // 更新 Firestore 中的學部結構
                     await setDoc(structureDocRef, updatedStructure);
                     
-                    // 儲存新班級的初始資料
                     const classData = firestoreData[currentDepartment] || {};
                     classData[className] = { expected: expectedCount, actual: 0, absentStatus: '' };
                     await setDoc(dataDocRef, { [currentDepartment]: classData }, { merge: true });
@@ -621,10 +624,8 @@
                 const updatedClasses = schoolStructure[departmentId].filter(c => c !== classId);
                 const updatedStructure = { ...schoolStructure, [departmentId]: updatedClasses };
                 
-                // 更新 Firestore 中的學部結構
                 await setDoc(structureDocRef, updatedStructure);
                 
-                // 刪除該班級的資料
                 const currentData = firestoreData[departmentId] || {};
                 delete currentData[classId];
                 await setDoc(dataDocRef, { [departmentId]: currentData }, { merge: true });
