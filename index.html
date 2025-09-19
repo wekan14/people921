@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>人頭統計系統</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin: 15px 0;
+    }
+    button {
+      padding: 8px 12px;
+      margin: 5px;
+      border: none;
+      border-radius: 6px;
+      background: #4CAF50;
+      color: #fff;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .delete-btn {
+      background: #f44336;
+    }
+    .delete-btn:hover {
+      background: #e53935;
+    }
+    .grey {
+      background: #eee;
+    }
+  </style>
+</head>
+<body>
+  <h1>人頭統計系統</h1>
+  <div id="app"></div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    // ✅ 這裡放你的 Firebase 設定值（從 Firebase Console 拿）
+    const firebaseConfig = {
+      apiKey: "你的 API Key",
+      authDomain: "people921-33420.firebaseapp.com",
+      projectId: "people921-33420",
+      storageBucket: "people921-33420.appspot.com",
+      messagingSenderId: "91139631676",
+      appId: "1:91139631676:web:xxxxxx"
+    };
+
+    // 初始化 Firebase
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } 
+      from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const appDiv = document.getElementById("app");
+
+    // 🔹 新增人員
+    async function addPerson(name) {
+      await addDoc(collection(db, "people"), {
+        name: name,
+        introduced: false,
+        createdAt: new Date()
+      });
+      loadPeople();
+    }
+
+    // 🔹 刪除人員
+    async function deletePerson(id) {
+      await deleteDoc(doc(db, "people", id));
+      loadPeople();
+    }
+
+    // 🔹 載入人員
+    async function loadPeople() {
+      appDiv.innerHTML = "";
+      const snapshot = await getDocs(collection(db, "people"));
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const div = document.createElement("div");
+        div.className = "card" + (data.introduced ? " grey" : "");
+        div.innerHTML = `
+          <strong>${data.name}</strong><br/>
+          <button onclick="deletePerson('${docSnap.id}')" class="delete-btn">刪除</button>
+        `;
+        appDiv.appendChild(div);
+      });
+
+      // 新增輸入框
+      const inputDiv = document.createElement("div");
+      inputDiv.className = "card";
+      inputDiv.innerHTML = `
+        <input type="text" id="nameInput" placeholder="輸入名字"/>
+        <button onclick="addPersonFromInput()">新增</button>
+      `;
+      appDiv.appendChild(inputDiv);
+    }
+
+    // 🔹 輔助函數
+    window.addPersonFromInput = function() {
+      const input = document.getElementById("nameInput");
+      if (input.value.trim() !== "") {
+        addPerson(input.value.trim());
+        input.value = "";
+      }
+    };
+    window.deletePerson = deletePerson;
+
+    // 載入
+    loadPeople();
+  </script>
+</body>
+</html>
