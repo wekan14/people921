@@ -144,8 +144,7 @@
             <div class="text-center">
                 <button id="back-button" class="px-6 py-2 bg-gray-500 text-white font-semibold rounded-full hover:bg-gray-600 transition-colors duration-200 shadow-md">
                     回到回報頁面
-                </button>
-            </div>
+                </button></div>
         </div>
     </div>
 
@@ -226,6 +225,8 @@
 
         let firestoreData = null;
         let schoolStructure = null;
+        let isStructureLoaded = false;
+        let isDataLoaded = false;
         let currentDepartment = '';
         let userId = '';
         let classToDelete = {};
@@ -459,7 +460,7 @@
 
         // 統一渲染函數
         function renderUI() {
-            if (!schoolStructure || !firestoreData) {
+            if (!isStructureLoaded || !isDataLoaded) {
                 return;
             }
 
@@ -490,11 +491,13 @@
                 // 監聽兩個 Firestore 文件
                 onSnapshot(structureDocRef, (doc) => {
                     schoolStructure = doc.exists() ? doc.data() : defaultSchoolStructure;
+                    isStructureLoaded = true;
                     renderUI();
                 });
 
                 onSnapshot(dataDocRef, (doc) => {
                     firestoreData = doc.exists() ? doc.data() : {};
+                    isDataLoaded = true;
                     renderUI();
                 });
 
